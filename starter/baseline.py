@@ -62,9 +62,12 @@ RESULTS_DIR = os.path.join(ROOT, "evaluation", "results")
 # 0 means no smoothing. 25 frames is one second at 25 fps, so these are +/- 1 s, 2 s and 5 s.
 VARIANTS = (
     ("baseline_raw", 0),
+    ("baseline_smooth12", 12),
     ("baseline_smooth25", 25),
     ("baseline_smooth50", 50),
+    ("baseline_smooth75", 75),
     ("baseline_smooth125", 125),
+    ("baseline_smooth200", 200)
 )
 
 # Raw ATD line: "<frame>:<player>;<player>;...:<ball>", each group "x,y,speed" with NaN for a

@@ -218,3 +218,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Videos
+*.mp4
+
+*.DS_Store
+evaluation/reports/*baseline*
+evaluation/results/*baseline*
+# Large raw data files (keep local, do not commit)
+data/broadcast/
+data/tactical/

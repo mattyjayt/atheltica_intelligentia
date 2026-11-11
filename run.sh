@@ -1,0 +1,1 @@
+uv run python run_inference.py
