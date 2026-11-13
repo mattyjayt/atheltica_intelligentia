@@ -1,4 +1,8 @@
 #!/bin/sh
+# Remove everything solution/run_inference.py produces, so the next run starts clean.
+# Baseline submissions in evaluation/results/ are left alone. Works from any directory.
+cd "$(dirname "$0")/.." || exit 1
+
 REPORTS="evaluation/reports/"
 RESULTS="evaluation/results"
 SCORE="evaluation/scoreboard.csv"
