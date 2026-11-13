@@ -71,6 +71,76 @@ are never filled across a dead ball from Step 1.
 Every threshold is a named setting at the top of `solution/run_inference.py`. The walkthrough
 explains where each one comes from and shows that the results are not sensitive to the exact values.
 
+## How we got here
+
+1. **Measured the baseline's weak spot.** It finds only 21% of dead-ball frames (`recall_D` 0.21),
+   and dead ball is a third of macroF1.
+2. **Tested its assumption that "ball missing" means "dead ball".** It is wrong both ways (see
+   above), so a better dead-ball signal was needed.
+3. **Measured candidate signals against the public ground truth.** For each variable we asked how
+   well it separates dead frames from live ones (AUC; 0.5 is useless). The two strongest were
+   **average player speed** (0.79) and **ball distance to the nearest line** (0.77). A stationary
+   ball was useless (0.51).
+4. **Looked at what the set pieces mark.** Lining up all 59 set pieces showed that a set piece's
+   *start* is the restart: players are slowest exactly then. The ball usually left play 10-30 s
+   earlier. That gave the shape of a dead ball: **from the ball leaving play, to the restart**.
+5. **Noticed that stoppages without a set piece still show the slowdown.** Two of the four in the
+   public window are like this. So player speed became the backbone of Step 1, and exits and set
+   pieces became the anchors.
+6. **Filled what was left.** With stoppages handled, a remaining missing-ball gap is most likely a
+   hidden ball, which led to Step 2.
+
+## Variables
+
+### What we read from the data
+
+| input | source | meaning |
+|---|---|---|
+| frame | all sources | One video frame, 25 per second. 199,319 frames; only the two halves (158,857 frames) are graded |
+| ball position | tracking (ATD) | Where the ball is on the pitch, converted to metres (105.3 × 68 m). Missing when the camera system cannot see it (~41% of graded frames) |
+| player position and team | tracking (ATD) | Every tracked player's position and team. Used by the baseline to find the player nearest the ball |
+| player speed | tracking (ATD) | How fast each tracked player is moving, in m/s |
+| set-piece start | Smart Tagging | When a throw-in, corner, goal kick, free kick or kick-off begins (59 in the match). Converted from seconds to a frame |
+| baseline team | `starter/baseline.py` | Per frame: the team of the nearest player when the ball is visible, otherwise *no team* |
+
+### What we compute
+
+**Step 1: dead-ball detection**
+
+| variable | meaning | value | why this value |
+|---|---|---|---|
+| team speed | Average speed of all tracked players, smoothed over 1 s | | About 1.2 m/s when play is dead, 2.3 m/s when live |
+| slowdown | A stretch where team speed stays below a threshold for a minimum time | < 1.5 m/s for ≥ 3 s | Between the dead and live levels; results barely change from 1.2 to 1.8 m/s |
+| distance to line | Metres from the ball to the nearest touchline or goal line; negative when outside the pitch | | About 4 m when dead, 13 m when live |
+| ball exit | The moment the ball left play: seen more than 0.5 m outside the pitch, or lost within 2 m of a line. Exits less than 5 s apart count as one | 0.5 m / 2 m / 5 s | Small margins absorb tracking noise |
+| anchor | Evidence that a slowdown is a real stoppage: an exit up to 15 s before it, or a set-piece start inside it or up to 5 s after | 15 s / 5 s | Exits typically come 10-30 s before the restart |
+| restart | The end of the dead ball: set-piece start + 1 s | 1 s | Waiting for players to speed up instead scored worse |
+| unanchored slowdown | A slowdown with no anchor that is slower and longer: fouls and injuries | < 1.2 m/s for ≥ 5 s | Stricter, because there is no other evidence; finding these lifts dead-ball recall from 0.52 to 0.84 |
+| dead ball | Every frame from the exit (or slowdown start) to the restart (or slowdown end). Forced to `D` after smoothing | | |
+
+**Step 2: gap filling**
+
+| variable | meaning | value | why this value |
+|---|---|---|---|
+| gap | A run of frames with no team inside one half: the ball is missing and the frame is not a Step 1 dead ball | | |
+| team either side | The majority team in the second before and the second after the gap | 1 s | Long enough to ignore a one-frame flicker |
+| longest same-team fill | Longest gap filled when the same team is on both sides | 20 s (8 s × 2.5) | Mid-point of the 8-30 s range we compared; most gaps last 5-30 s |
+| longest switch fill | Longest gap filled when the teams differ; the gap is split in half between them | 2 s | The hand-over happened inside the gap, so only short gaps can be split safely |
+
+**Final step: smoothing.** The baseline's majority vote over ±*window* frames, for each window from
+±12 (0.5 s) to ±200 (8 s). The Step 1 dead-ball frames are then set to `D`.
+
+### Scoring terms
+
+| term | meaning |
+|---|---|
+| possession | An uninterrupted run of `H` or of `A`. A dead ball ends one possession |
+| macroF1 | The F1 score of `H`, `A` and `D` averaged equally: right label on the right frame |
+| spellF1 | How well predicted possessions match the true ones in time, averaged over overlap thresholds 0.3-0.7. **The ranking metric** |
+| precision / recall | Of the frames we gave a label, the share that were right / of the frames that truly had that label, the share we found |
+| AUC | How well one variable separates dead from live frames: 0.5 = no better than chance, near 0 or 1 = clean separation |
+| public window | The first five minutes of play (17 possessions), the only ground truth available to participants |
+
 ## Results
 
 Scored with the official scorer against the public ground truth (the first five minutes of the
