@@ -1,0 +1,387 @@
+\documentclass[10pt,a4paper]{article}
+
+% ---------------------------------------------------------------- packages
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[margin=2.1cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage[table]{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{caption}
+\usepackage{pifont}
+\usepackage[most]{tcolorbox}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{figures/}}
+
+% ---------------------------------------------------------------- colours
+\definecolor{ours}{HTML}{2A78D6}
+\definecolor{ink2}{HTML}{52514E}
+\definecolor{rule}{HTML}{D9D8D3}
+\definecolor{note}{HTML}{F1F0EC}
+\definecolor{keep}{HTML}{1BAF7A}
+\definecolor{drop}{HTML}{E34948}
+
+\newcommand{\kept}{\textcolor{keep}{\ding{51}}}
+\newcommand{\dropped}{\textcolor{drop}{\ding{55}}}
+\newcommand{\lbl}[1]{\texttt{#1}}
+
+% ---------------------------------------------------------------- layout
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.55em}
+\setlist{itemsep=0.2em, topsep=0.3em}
+\titleformat{\section}{\large\bfseries\color{ours}}{\thesection}{0.7em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.3em}{0.4em}
+\titlespacing*{\subsection}{0pt}{0.9em}{0.25em}
+\captionsetup{font={small,color=ink2}, labelfont=bf, skip=4pt}
+\renewcommand{\arraystretch}{1.25}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\newtcolorbox{callout}[1][]{enhanced, colback=note, colframe=note, boxrule=0pt,
+  borderline west={2.5pt}{0pt}{ours}, sharp corners, left=8pt, right=8pt, top=5pt, bottom=5pt, #1}
+
+\begin{document}
+
+% ---------------------------------------------------------------- title
+\begin{center}
+  {\LARGE\bfseries Who has the ball?}\\[0.3em]
+  {\large Technical document \textperiodcentered{} Athletica Intelligentia}\\[0.6em]
+  {\small\color{ink2} More Than A Hack possession challenge \textperiodcentered{}
+  FC Barcelona (home, \lbl{H}) vs Athletic Club (away, \lbl{A})\\
+  25 fps \textperiodcentered{} 199,319 frames, 158,857 graded}
+\end{center}
+\vspace{0.4em}
+
+% ================================================================ 1
+\section{Summary}
+
+We label every frame of the match \lbl{H}, \lbl{A} or \lbl{D} (dead ball). We start from the challenge
+baseline and add two rule-based steps, each motivated by what the data shows:
+
+\begin{enumerate}
+  \item \textbf{Dead-ball detection.} Find stoppages from how the \emph{players} move, not only from whether
+        the camera can see the ball.
+  \item \textbf{Gap filling.} When the ball is hidden during live play, give it to the team that clearly had
+        it before and after.
+\end{enumerate}
+
+There is no machine learning and no training. Every step is a readable rule over the tracking data and the
+Smart Tagging events, and every threshold is a named setting at the top of \lbl{solution/run\_inference.py}.
+
+\begin{callout}
+At the published $\pm$50 smoothing window, on the public five minutes, \textbf{spellF1 rises from 0.326 to
+0.446} and \textbf{macroF1 from 0.621 to 0.811}. Dead-ball recall goes from 0.21 to 0.84. Our solution beats
+the baseline on both metrics at every smoothing window we tested.
+\end{callout}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{fig1_pipeline.png}
+  \caption{The pipeline. Our two steps sit between the baseline's per-frame answer and its smoothing.}
+\end{figure}
+
+% ================================================================ 2
+\section{The approach, and why}
+
+\subsection{The baseline's weak spot is the dead ball}
+
+The baseline gives each frame to the team of the player nearest the ball, says \lbl{D} whenever the ball is
+not visible, and smooths with a majority vote. It gets the team right most of the time, but finds only
+\textbf{21\% of dead-ball frames}. Since macroF1 weights \lbl{H}, \lbl{A} and \lbl{D} equally, and dead balls
+are what separate possessions in spellF1, this is where the points are.
+
+The baseline's assumption that ``ball missing = dead ball'' fails in both directions on the public ground truth:
+\begin{itemize}
+  \item \textbf{Two thirds of real dead-ball time has the ball visible.} The ball is out of play or being placed
+        for a restart but still tracked, so the baseline calls it possession.
+  \item \textbf{Almost half of the missing-ball frames are live play.} The ball is hidden behind players or in
+        the air, so the baseline calls it dead.
+\end{itemize}
+Our two steps each fix one of these failures.
+
+\subsection{Why player speed, and not the ball}
+
+We measured candidate signals against the public ground truth, asking how well each one separates dead frames
+from live ones (AUC, where 0.5 is useless).
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.72\linewidth]{fig3_signals.png}
+  \caption{Separation strength of the candidate signals on the public five minutes.}
+\end{figure}
+
+\begin{itemize}
+  \item \textbf{Players slow down together} when play stops. Mean player speed roughly halves, from about 2.3
+        to 1.2\,m/s. It is the strongest signal, and it does not need the ball to be visible.
+  \item \textbf{Dead balls happen near the lines.} The ball is about 4\,m from a line when play is dead, against
+        13\,m in live play.
+  \item \textbf{A stationary ball tells us nothing.} During a stoppage the ball is carried, thrown back or
+        rolled into place, rarely still.
+\end{itemize}
+
+Lining up all 59 Smart Tagging set pieces on their start time showed that the \textbf{start of a set piece is
+the restart}: players are slowest exactly then and accelerate within seconds. The ball usually left play
+10--30\,s earlier. That gave the shape of a dead ball: \emph{from the ball leaving play, to the restart}
+(Figure~\ref{fig:stoppage}).
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.92\linewidth]{fig2_stoppage.png}
+  \caption{Schematic of a typical stoppage (illustrative, not match data). The dead ball runs from the ball
+  exit to the restart, while mean player speed sits below the slowdown threshold.}
+  \label{fig:stoppage}
+\end{figure}
+
+Two of the four stoppages in the public window have no ball exit and no set piece (fouls, injuries), but they
+still show the slowdown. So player speed became the backbone of Step~1, and exits and set pieces became the
+evidence that confirms a slowdown is a real stoppage.
+
+\subsection{Why rules rather than a model}
+
+The only ground truth available is five minutes long, with 17 possessions. That is too little to train or
+validate a learned model without overfitting. Rules built from measured signals can be read, checked and
+stress-tested (Section~\ref{sec:results} shows the results barely move when the thresholds change), and they
+transfer to the rest of the match without needing labels.
+
+% ================================================================ 3
+\section{Assets: what we used, and what we dropped}
+
+\begin{table}[h]
+\small
+\begin{tabularx}{\linewidth}{@{}p{5.1cm}cY@{}}
+\toprule
+\textbf{Asset} & \textbf{Used} & \textbf{How} \\
+\midrule
+Tracking (ATD): ball position & \kept & Nearest-player rule; ball speed; distance to the nearest line; ball exits.
+  Missing on $\sim$41\% of graded frames \\
+Tracking (ATD): player positions and teams & \kept & Nearest player to the ball (baseline) \\
+Tracking (ATD): player speeds & \kept & Mean speed of all tracked players, smoothed over 1\,s: the backbone of Step~1 \\
+Smart Tagging: set-piece start times & \kept & Marks the restart, which ends a dead ball. 59 in the match \\
+Smart Tagging: set-piece intervals & \dropped & A fixed $\sim$35\,s that mostly covers live play after the kick \\
+Smart Tagging: Team tag & -- & Not tried: noisy, and missing on every throw-in. A future idea \\
+Public ground truth (first 5 min) & \kept & Measuring signals and checking each step. Never used to fine-tune thresholds \\
+Challenge code (\lbl{starter/}, \lbl{evaluation/}, \lbl{games.py}) & \kept & Used unchanged: the baseline and the official scorer \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Smart Tagging is automatic and incomplete: it lists only 26 throw-ins for the whole match, and only about 60\%
+of ball exits are followed by a tagged set piece within 60\,s. That is why it serves as supporting evidence,
+never as the main signal.
+
+% ================================================================ 4
+\section{Possession rules}
+
+\subsection{Who has the ball (live play)}
+\begin{itemize}
+  \item \textbf{Visible ball:} the team of the tracked player nearest the ball has it. This is the baseline rule,
+        used unchanged.
+  \item \textbf{Loose balls and the ball in the air:} these also go to the nearest player's team. We tried a
+        ``hold owner'' rule, keeping the last team when nobody is within 3\,m of the ball. It scored worse
+        (spellF1 0.297) and only helped at a $\sim$1.5\,m distance tuned on five minutes, so we dropped it.
+  \item \textbf{Challenges and 50/50s:} not modelled separately. Brief flicks between teams during a contest are
+        absorbed by the majority-vote smoothing. Possession changes once one team holds the ball for most of
+        the window.
+\end{itemize}
+
+\subsection{When the ball is dead (Step 1)}
+
+A \textbf{dead ball} is a stretch where the players slow down together, supported by evidence that play stopped.
+
+\begin{table}[h]
+\small
+\begin{tabularx}{\linewidth}{@{}p{5.6cm}p{3.0cm}Y@{}}
+\toprule
+\textbf{Rule} & \textbf{Setting} & \textbf{Why} \\
+\midrule
+\textbf{Slowdown:} mean player speed stays below a threshold for a minimum time
+  & $<$1.5\,m/s for $\geq$3\,s & Between the dead (1.2) and live (2.3) levels; results barely change from 1.2 to 1.8\,m/s \\
+\textbf{Ball exit:} ball seen outside the pitch, or lost near a line; exits $<$5\,s apart count as one
+  & 0.5\,m / 2\,m / 5\,s & Small margins absorb tracking noise \\
+\textbf{Anchor:} an exit up to 15\,s before the slowdown, or a set-piece start inside it or up to 5\,s after
+  & 15\,s / 5\,s & Exits typically come 10--30\,s before the restart \\
+\textbf{Start:} the ball exit if there is one, otherwise the start of the slowdown
+  & -- & The dead ball begins when the ball leaves play, not when players react \\
+\textbf{Restart (end):} set-piece start + 1\,s, otherwise the end of the slowdown
+  & 1\,s & Waiting for players to speed up scored worse \\
+\textbf{Unanchored slowdown:} no exit, no set piece, but slower and longer (fouls, injuries)
+  & $<$1.2\,m/s for $\geq$5\,s & Stricter, with no other evidence. Lifts dead-ball recall from 0.52 to 0.84 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Dead-ball frames are \textbf{forced to \lbl{D} after smoothing}, so the majority vote cannot overrule them.
+
+\subsection{When the ball is hidden (Step 2)}
+
+A \textbf{gap} is a run of frames inside one half where the ball is missing and Step~1 found no dead ball. The
+team on each side is the majority team in the second before and the second after the gap.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.95\linewidth]{fig6_gaps.png}
+  \caption{The four gap-filling cases.}
+\end{figure}
+
+\begin{table}[h]
+\small
+\begin{tabularx}{\linewidth}{@{}p{4.4cm}p{5.0cm}Y@{}}
+\toprule
+\textbf{Case} & \textbf{Rule} & \textbf{Why} \\
+\midrule
+Same team either side & Fill with that team, up to \textbf{20\,s} (8\,s $\times$ 2.5) & Most gaps last 5--30\,s; 20\,s is the mid-point of the range compared \\
+Teams differ, gap $\leq$2\,s & \textbf{Split down the middle} & The hand-over happened inside the gap; only short gaps split safely \\
+Teams differ, gap $>$2\,s & Leave as \lbl{D} & We cannot tell when the ball changed hands \\
+Gap inside a Step~1 dead ball & \textbf{Never filled} & That gap is a stoppage, not a hidden ball \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Smoothing}
+
+Finally, the baseline's majority vote over $\pm$window frames, for windows from $\pm$12 (0.5\,s) to $\pm$200
+(8\,s). One submission is written per window. Step~1 frames are then set back to \lbl{D}.
+
+% ================================================================ 5
+\section{Results}\label{sec:results}
+
+Scored with the official scorer against the public ground truth (the first five minutes of the match).
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{fig4_windows.png}
+  \caption{spellF1 and macroF1 across smoothing windows. Ours is higher at every window on both metrics.}
+\end{figure}
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+\textbf{Smoothing window} & \textbf{spellF1 baseline} & \textbf{spellF1 ours} & \textbf{macroF1 baseline} & \textbf{macroF1 ours} \\
+\midrule
+$\pm$12 & 0.101 & 0.106 & 0.607 & 0.768 \\
+$\pm$25 & 0.287 & 0.298 & 0.620 & 0.788 \\
+\rowcolor{note}\textbf{$\pm$50 (published baseline)} & \textbf{0.326} & \textbf{0.446} & \textbf{0.621} & \textbf{0.811} \\
+$\pm$75 & 0.400 & 0.520 & 0.603 & 0.818 \\
+$\pm$125 & 0.424 & 0.486 & 0.581 & 0.812 \\
+$\pm$200 & 0.193 & 0.288 & 0.515 & 0.789 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Dead-ball F1 at $\pm$50 rises from 0.32 to 0.78.
+
+\subsection{What each step contributes, and what we dropped}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=\linewidth]{fig5_ablation.png}
+  \caption{Each step alone, both together, and the approaches we tried and dropped.}
+\end{figure}
+
+\begin{itemize}
+  \item \textbf{Step 1} gives almost all of the macroF1 gain, because dead balls go from mostly missed to mostly found.
+  \item \textbf{Step 2} on its own makes possessions fewer and longer, which helps spellF1. But it lowers
+        dead-ball recall, because it fills some real stoppages. That is why it runs after Step~1.
+  \item \textbf{Together} they help spellF1 much more than either alone: Step~1 puts possession boundaries in
+        the right place, and Step~2 stops possessions breaking up every time the ball is hidden.
+\end{itemize}
+
+\begin{table}[h]
+\small
+\begin{tabularx}{\linewidth}{@{}p{5.6cm}p{2.3cm}Y@{}}
+\toprule
+\textbf{Tried and dropped} & \textbf{Result} & \textbf{Why} \\
+\midrule
+Interpolating the ball across short gaps & no change & Recovered 0.1\% of missing frames: almost every gap is longer than 4\,s \\
+``Hold owner'' when nobody is within 3\,m & 0.297 / 0.598 & Worse. Only helped at $\sim$1.5\,m, a value tuned on five minutes \\
+First version of Step 1 (ball vanished near a line, or still) & 0.344 / 0.644 & Found only 28\% of dead-ball time \\
+Stationary ball as a stoppage signal & no separation & During stoppages the ball is carried or rolled back \\
+Set-piece intervals as \lbl{D} & not used & Mostly live play after the kick \\
+Corner zone (ball near a flag = corner set-up) & no effect & The tracker sees the ball near a flag for only $\sim$4\,s all match \\
+Restart on acceleration & 0.322 / 0.803 & Players are still slow after the kick, when a team already has the ball \\
+\bottomrule
+\end{tabularx}
+\caption*{Scores are spellF1 / macroF1 at $\pm$50.}
+\end{table}
+
+\begin{callout}
+\textbf{A word of caution.} The public window holds only 17 possessions. One missed possession moves spellF1 by
+about 0.06. Treat these numbers as evidence that the method works, not as a precise ranking of windows or settings.
+\end{callout}
+
+% ================================================================ 6
+\section{Limitations, and what we would fix with more time}
+
+\textbf{Slow build-up looks like a stoppage.} At every window, home-team recall is about 0.02--0.03 below the
+baseline (0.859 vs 0.880 at $\pm$50). Almost all of the loss is Barcelona possession being called dead. Our
+hypothesis is that Barcelona's slow, patient circulation at the back, with players barely moving, looks like a
+stoppage to a rule built on player speed. \emph{Fix:} add a signal that tells slow play from stopped play, such
+as whether the ball keeps moving between teammates.
+
+\textbf{False ball exits.} A ball that vanishes near a line is not always out of play. One false exit in the
+public window creates a wrong 10-second dead ball. \emph{Fix:} require the ball to stay unseen, or the players to
+slow, before trusting an exit near a line.
+
+\textbf{Smart Tagging is incomplete.} It misses many restarts (only 26 throw-ins tagged). Missing restarts fall
+back on the stricter unanchored rule, so some short stoppages are missed.
+
+\textbf{Challenges are not modelled.} 50/50s and tackles are left to the nearest-player rule and smoothing.
+Fast turnovers can lag by up to half a smoothing window.
+
+\textbf{We cannot confirm the full-match dead-ball share.} We label about 46\% of the whole match as dead, against
+20\% in the public five minutes. Professional matches typically have 52--55 minutes of real playing time, so
+40--45\% dead is plausible, and the opening minutes had few stoppages. It cannot be confirmed without the full
+ground truth.
+
+\textbf{Small validation sample.} Five minutes cannot reliably separate two good settings. The best-looking
+window on the public data may not be the best over the full match.
+
+\textbf{Ideas not yet tried:}
+\begin{itemize}
+  \item \textbf{Team shape when the ball is missing:} the team in possession spreads out and the defending team compacts.
+  \item \textbf{Smart Tagging's Team tag} as a prior on who has the ball.
+  \item \textbf{A minimum possession length} inside the smoothing step, to stop very short false possessions.
+\end{itemize}
+
+% ================================================================ 7
+\section{Reproduction}
+
+The match data is gated and is not in the repository. See \lbl{DATA.md} for how to obtain it, and unpack it into
+\lbl{data/}.
+
+\begin{tcolorbox}[colback=note, colframe=rule, boxrule=0.4pt, sharp corners, left=6pt]
+\small\ttfamily
+uv sync\hfill\textcolor{ink2}{\# install dependencies}\\
+uv run python solution/run\_inference.py\hfill\textcolor{ink2}{\# write submissions, score, compare}\\
+./solution/clean.sh\hfill\textcolor{ink2}{\# remove everything the script produces}
+\end{tcolorbox}
+
+\lbl{run\_inference.py} computes the baseline's nearest-player answer with the challenge's own code, applies
+Step~1 and Step~2, then writes and scores one submission per smoothing window:
+
+\begin{table}[h]
+\small
+\begin{tabularx}{\linewidth}{@{}>{\footnotesize}p{10.2cm}Y@{}}
+\toprule
+\normalsize\small\textbf{Output} & \textbf{Content} \\
+\midrule
+\lbl{evaluation/results/athletica\_intelligentia\_smooth\_<window>.csv} & One submission per window \\
+\lbl{evaluation/scoreboard.csv}, \lbl{evaluation/reports/*.json} & Official scores \\
+\lbl{evaluation/reports/athletica\_intelligentia\_config.json} & Exact settings used \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+To experiment, change a setting at the top of \lbl{solution/run\_inference.py} (for example
+\lbl{STOP\_PLAYER\_SPEED} or \lbl{GAP\_FILL\_MULTIPLIER}), or switch a step off in \lbl{PIPELINE}.
+\lbl{solution/walkthrough.ipynb} walks through the data analysis behind every rule and re-runs each comparison
+in this document.
+
+\end{document}
