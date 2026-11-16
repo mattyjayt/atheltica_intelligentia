@@ -1,8 +1,17 @@
-# Who has the ball? Technical document
+# Who has the ball?
 
-**Team:** Athletica Intelligentia
-**Challenge:** More Than A Hack, possession labelling
+### Technical document · More Than A Hack possession challenge
+
+## Team: Athletica Intelligentia
+
+| Team member | LinkedIn |
+|---|---|
+| Jaime Tellie | [linkedin.com/in/jaime-tellie](https://www.linkedin.com/in/jaime-tellie/) |
+| Justin Naidu | [linkedin.com/in/justin-naidu6539](https://www.linkedin.com/in/justin-naidu6539/) |
+| Anjéwayne Pillay | [linkedin.com/in/anjéwayne-pillay-24321022b](https://www.linkedin.com/in/anj%C3%A9wayne-pillay-24321022b/) |
+
 **Match:** FC Barcelona (home, `H`) vs Athletic Club (away, `A`), 25 fps, 199,319 frames (158,857 graded)
+**Date:** November 2026
 
 ---
 
@@ -215,6 +224,11 @@ the public data may not be the best over the full match.
 - **Team shape when the ball is missing:** the team in possession spreads out and the defending team compacts.
 - **Smart Tagging's Team tag** as a prior on who has the ball.
 - **A minimum possession length** inside the smoothing step, to stop very short false possessions.
+
+**In short.** The biggest gain came not from better ball tracking but from noticing that the *players* know when
+play has stopped. A slowdown, confirmed by the ball leaving play or a restart, finds four times as many dead balls
+as the baseline. The next step is to tell slow play from stopped play, which would recover the home-team possession
+we currently lose.
 
 ---
 
