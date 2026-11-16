@@ -13,8 +13,10 @@
 \usepackage{enumitem}
 \usepackage{titlesec}
 \usepackage{caption}
+\usepackage{float}
 \usepackage{pifont}
 \usepackage[most]{tcolorbox}
+\usepackage{tikz}
 \usepackage[hidelinks]{hyperref}
 
 \graphicspath{{figures/}}
@@ -48,15 +50,47 @@
 
 \begin{document}
 
-% ---------------------------------------------------------------- title
-\begin{center}
-  {\LARGE\bfseries Who has the ball?}\\[0.3em]
-  {\large Technical document \textperiodcentered{} Athletica Intelligentia}\\[0.6em]
-  {\small\color{ink2} More Than A Hack possession challenge \textperiodcentered{}
-  FC Barcelona (home, \lbl{H}) vs Athletic Club (away, \lbl{A})\\
-  25 fps \textperiodcentered{} 199,319 frames, 158,857 graded}
-\end{center}
-\vspace{0.4em}
+% ---------------------------------------------------------------- cover
+\begin{titlepage}
+\newgeometry{margin=2.6cm}
+\begin{tikzpicture}[remember picture, overlay]
+  \fill[ours] (current page.north west) rectangle ([yshift=-0.9cm]current page.north east);
+\end{tikzpicture}
+
+\vspace*{3.2cm}
+{\large\color{ours}\bfseries More Than A Hack \textperiodcentered{} Possession challenge}\par
+\vspace{0.6cm}
+{\fontsize{34}{40}\selectfont\bfseries Who has the ball?}\par
+\vspace{0.4cm}
+{\Large\color{ink2} Technical document}\par
+\vspace{0.5cm}
+{\color{ours}\rule{3cm}{2pt}}\par
+\vspace{0.9cm}
+{\normalsize\color{ink2}Team}\par
+\vspace{0.1cm}
+{\huge\bfseries Athletica Intelligentia}\par
+\vspace{1.6cm}
+
+{\renewcommand{\arraystretch}{1.6}
+\begin{tabular}{@{}p{5.2cm}l@{}}
+\toprule
+\textbf{Team member} & \textbf{LinkedIn} \\
+\midrule
+Jaime Tellie & \href{https://www.linkedin.com/in/jaime-tellie/}{\textcolor{ours}{linkedin.com/in/jaime-tellie}} \\
+Justin Naidu & \href{https://www.linkedin.com/in/justin-naidu6539/}{\textcolor{ours}{linkedin.com/in/justin-naidu6539}} \\
+Anjéwayne Pillay & \href{https://www.linkedin.com/in/anj\%C3\%A9wayne-pillay-24321022b/}{\textcolor{ours}{linkedin.com/in/anjéwayne-pillay-24321022b}} \\
+\bottomrule
+\end{tabular}}
+
+\vfill
+{\small\color{ink2}
+FC Barcelona (home, \lbl{H}) vs Athletic Club (away, \lbl{A}) \textperiodcentered{}
+25 fps \textperiodcentered{} 199,319 frames, 158,857 graded\par
+\vspace{0.2cm}
+November 2026}
+\restoregeometry
+\end{titlepage}
+\setcounter{page}{1}
 
 % ================================================================ 1
 \section{Summary}
@@ -80,7 +114,7 @@ At the published $\pm$50 smoothing window, on the public five minutes, \textbf{s
 the baseline on both metrics at every smoothing window we tested.
 \end{callout}
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{fig1_pipeline.png}
   \caption{The pipeline. Our two steps sit between the baseline's per-frame answer and its smoothing.}
@@ -110,7 +144,7 @@ Our two steps each fix one of these failures.
 We measured candidate signals against the public ground truth, asking how well each one separates dead frames
 from live ones (AUC, where 0.5 is useless).
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.72\linewidth]{fig3_signals.png}
   \caption{Separation strength of the candidate signals on the public five minutes.}
@@ -130,7 +164,7 @@ the restart}: players are slowest exactly then and accelerate within seconds. Th
 10--30\,s earlier. That gave the shape of a dead ball: \emph{from the ball leaving play, to the restart}
 (Figure~\ref{fig:stoppage}).
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.92\linewidth]{fig2_stoppage.png}
   \caption{Schematic of a typical stoppage (illustrative, not match data). The dead ball runs from the ball
@@ -152,7 +186,7 @@ transfer to the rest of the match without needing labels.
 % ================================================================ 3
 \section{Assets: what we used, and what we dropped}
 
-\begin{table}[h]
+\begin{table}[H]
 \small
 \begin{tabularx}{\linewidth}{@{}p{5.1cm}cY@{}}
 \toprule
@@ -194,7 +228,7 @@ never as the main signal.
 
 A \textbf{dead ball} is a stretch where the players slow down together, supported by evidence that play stopped.
 
-\begin{table}[h]
+\begin{table}[H]
 \small
 \begin{tabularx}{\linewidth}{@{}p{5.6cm}p{3.0cm}Y@{}}
 \toprule
@@ -223,13 +257,13 @@ Dead-ball frames are \textbf{forced to \lbl{D} after smoothing}, so the majority
 A \textbf{gap} is a run of frames inside one half where the ball is missing and Step~1 found no dead ball. The
 team on each side is the majority team in the second before and the second after the gap.
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.95\linewidth]{fig6_gaps.png}
   \caption{The four gap-filling cases.}
 \end{figure}
 
-\begin{table}[h]
+\begin{table}[H]
 \small
 \begin{tabularx}{\linewidth}{@{}p{4.4cm}p{5.0cm}Y@{}}
 \toprule
@@ -253,13 +287,13 @@ Finally, the baseline's majority vote over $\pm$window frames, for windows from 
 
 Scored with the official scorer against the public ground truth (the first five minutes of the match).
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{fig4_windows.png}
   \caption{spellF1 and macroF1 across smoothing windows. Ours is higher at every window on both metrics.}
 \end{figure}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering\small
 \begin{tabular}{@{}lcccc@{}}
 \toprule
@@ -279,7 +313,7 @@ Dead-ball F1 at $\pm$50 rises from 0.32 to 0.78.
 
 \subsection{What each step contributes, and what we dropped}
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{fig5_ablation.png}
   \caption{Each step alone, both together, and the approaches we tried and dropped.}
@@ -293,7 +327,7 @@ Dead-ball F1 at $\pm$50 rises from 0.32 to 0.78.
         the right place, and Step~2 stops possessions breaking up every time the ball is hidden.
 \end{itemize}
 
-\begin{table}[h]
+\begin{table}[H]
 \small
 \begin{tabularx}{\linewidth}{@{}p{5.6cm}p{2.3cm}Y@{}}
 \toprule
@@ -350,6 +384,13 @@ window on the public data may not be the best over the full match.
   \item \textbf{A minimum possession length} inside the smoothing step, to stop very short false possessions.
 \end{itemize}
 
+\begin{callout}
+\textbf{In short.} The biggest gain came not from better ball tracking but from noticing that the
+\emph{players} know when play has stopped. A slowdown, confirmed by the ball leaving play or a restart, finds
+four times as many dead balls as the baseline. The next step is to tell slow play from stopped play, which would
+recover the home-team possession we currently lose.
+\end{callout}
+
 % ================================================================ 7
 \section{Reproduction}
 
@@ -366,7 +407,7 @@ uv run python solution/run\_inference.py\hfill\textcolor{ink2}{\# write submissi
 \lbl{run\_inference.py} computes the baseline's nearest-player answer with the challenge's own code, applies
 Step~1 and Step~2, then writes and scores one submission per smoothing window:
 
-\begin{table}[h]
+\begin{table}[H]
 \small
 \begin{tabularx}{\linewidth}{@{}>{\footnotesize}p{10.2cm}Y@{}}
 \toprule
